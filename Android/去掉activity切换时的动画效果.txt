@@ -1,0 +1,34 @@
+去掉activity切换时的动画效果
+
+Activity的动画效果在\android\frameworks\base\core\res\res\values下的stlyes.xml,themes.xml两个文件中有定义。
+ 
+去掉activity动画效果的方法:
+ 
+1.重写Activity的Them中的windowAnimationStyle相关属性，并保存在res/values/styles.xml
+ 
+<!-- 重新主题去掉activity切换的动画效果  -->
+    <style name="Theme" parent="android:Theme.Light.NoTitleBar.Fullscreen">
+        <item name="android:windowAnimationStyle">@style/Animation</item>
+    </style>
+    <style name="Animation">
+        <item name="android:activityOpenEnterAnimation">@null</item>
+        <item name="android:activityOpenExitAnimation">@null</item>
+        <item name="android:activityCloseEnterAnimation">@null</item>
+        <item name="android:activityCloseExitAnimation">@null</item>
+        <item name="android:taskOpenEnterAnimation">@null</item>
+        <item name="android:taskOpenExitAnimation">@null</item>
+        <item name="android:taskCloseEnterAnimation">@null</item>
+        <item name="android:taskCloseExitAnimation">@null</item>
+        <item name="android:taskToFrontEnterAnimation">@null</item>
+        <item name="android:taskToFrontExitAnimation">@null</item>
+        <item name="android:taskToBackEnterAnimation">@null</item>
+        <item name="android:taskToBackExitAnimation">@null</item>
+    </style>
+   
+   其中parent中的主题可以根据自己的需要去调用系统的其他主题样式.
+ 
+2.在不想有动画的Activity上设置此属性
+ 
+   <activity android:name=".CYActivity"
+            android:screenOrientation="nosensor"
+            android:theme="@style/Theme">

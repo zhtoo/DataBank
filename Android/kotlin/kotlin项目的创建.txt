@@ -1,0 +1,13 @@
+本文针对As3.0以前版本书写
+1、导入kotlin（插件输入Kotlin）
+2、正常创建项目
+3、shift + ctrl + A 
+	输入：Convert Java File to Kotlin File
+	（将java代码转换为kotlin）
+	
+	
+4、工程中配置 Kotlin：
+在开始编译时，Android Studio 会提示当前工程还未配置 Kotlin，根据提示完成操作即可；或者可以在菜单栏中选择 Tools--->Kotlin	Configure Kotlin 。
+
+5、同步工程：
+在提示框中点击“立即同步（Sync Now）”或者使用 Sync Project with Gradle Files命令。

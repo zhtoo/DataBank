@@ -1,0 +1,106 @@
+dataBinding
+
+基本使用：
+
+1、在build中注入：
+
+android {
+    // 开启dataBinding
+    dataBinding.enabled = true
+}
+
+2、布局文件
+
+<?xml version="1.0" encoding="utf-8"?>
+<layout xmlns:android="http://schemas.android.com/apk/res/android">
+    <data>
+        <variable
+            name="viewModel"
+            type="com.hs.mydatabinding.MainVM"/>
+    </data>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <TextView
+			android:id="@+id/mText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@{viewModel.text}"/>
+
+    </LinearLayout>
+</layout>
+
+3、activity类
+
+import android.databinding.DataBindingUtil;
+import android.os.Bundle;
+import android.support.v7.app.AppCompatActivity;
+
+import com.hs.mydatabinding.databinding.ActivityMainBinding;
+
+public class MainActivity extends AppCompatActivity {
+
+    private ActivityMainBinding binding;
+    private MainVM viewModel;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+		//绑定视图
+        binding = DataBindingUtil.setContentView(this, R.layout.activity_main);
+        viewModel = new MainVM(binding);
+		//设置viewModel
+        binding.setViewModel(viewModel);
+    }
+}
+
+4、viewModel类
+public class MainVM {
+
+    private ActivityMainBinding binding;
+
+    public MainVM() {}
+
+    public MainVM(ActivityMainBinding binding) {
+        this.binding = binding;
+       // binding.mText.setText("Hello World!");
+    }
+
+    private String text = "测试" + "123456";
+
+    public String getText() {
+        return text;
+    }
+
+    public void setText(String text) {
+        this.text = text;
+    }
+}
+
+5、调用问题：
+示例：
+binding.viewID(就可以获取空间对象)
+
+android:text="@{viewModel.text}"
+text 是viewModel里面的成员变量
+
+高级使用：
+(待开发)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

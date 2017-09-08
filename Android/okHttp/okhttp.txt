@@ -1,0 +1,407 @@
+##OkHttp
+OkHttp 是一个高效的 http 客户端，特点如下：
+* 支持 http2 协议，对同一个主机的所有请求允许使用同一个 socket
+* 如果 http2 不可用，使用链接池技术来降低了请求响应的延迟
+* 使用透明的 gzip 压缩减少了数据流量
+* 使用网络缓存避免了重复的网络请求
+
+对于一些常见的链接问题，OkHttp 可以从问题中自动恢复链接。
+* 从如果你的服务有多个IP地址，第一次连接失败后，OkHttp将尝试使用备用地址连接。这对于使用 ipv4+ipv6 的服务和使用冗余数据中心托管的服务很有必要。
+* OkHttp使用TLS新的功能（SNI，ALPN）创建一个连接，如果握手失败自动会退到TLS 1.0。
+
+OkHttp 的使用非常容易，它的请求/响应 api 使用流式构建者模式，并且具有不可变性。它既支持会发生阻塞的同步调用，还支持使用回调的异步调用。 
+
+使用 OKHttp 要求 android2.3 及以上版本，java 运行时要求1.7及以上版本。
+
+## OkHttp 使用案例
+这些案例演示如何使用 okhttp 来解决一些常见的问题。通过学习这些案例可以知道如何协同使用 okhttp 组件完成你的工作。下面案例中的代码使用的 OkHttp2.0 并且可自由复制粘贴修改。
+
+### Synchronous Get
+在你使用 http 请求去下载一个小文件的时候，如果你想把响应头和响应体作为字符串打印出来，可以使用响应的 string() 方法，这个方法非常方便和高效。但是如果响应体太大，比如超过 1M，这个方法会导致加载整个文件到内存中，所以这种情况应该避免使用 string() 方法，而应该以 Stream 的形式处理请求体。
+
+	private final OkHttpClient client = new OkHttpClient();
+	
+	public void run() throws Exception {
+		Request request = new Request.Builder()
+			.url("http://publicobject.com/helloworld.txt")
+			.build();
+		
+		Response response = client.newCall(request).execute();
+		if (!response.isSuccessful()){
+			throw new IOException("Unexpected code " + response);
+		}
+		Headers responseHeaders = response.headers();
+		for (int i = 0; i < responseHeaders.size(); i++) {
+			System.out.println(responseHeaders.name(i) + ": " + responseHeaders.value(i));
+		}
+		System.out.println(response.body().string());
+	}
+
+
+### Asynchronous Get
+下面演示在 okhttp 的工作线程中（后台线程）去下载一个文件，在响应到达时通过回调通知我们。这里的回调通知会在响应头准备好后就产生。在回调函数中去读取响应体的时候仍然可能会发生阻塞，OkHttp 当前还不支持接收部分响应体数据的异步api。
+
+	private final OkHttpClient client = new OkHttpClient();
+	
+	Request request = new Request.Builder()
+		.url("http://publicobject.com/helloworld.txt")
+		.build();
+	
+	client.newCall(request).enqueue(new Callback() {
+		@Override
+		public void onFailure(Request request, IOException e) {
+			e.printStackTrace();
+		}
+	
+		@Override
+		public void onResponse(Response response) throws IOException {
+			if (!response.isSuccessful()) {
+				throw new IOException("Unexpected code " + response);
+			}
+			
+			Headers responseHeaders = response.headers();
+			for (int i = 0, size = responseHeaders.size(); i < size; i++) {
+				System.out.println(responseHeaders.name(i) + ": " + responseHeaders.value(i));
+			}
+			System.out.println(response.body().string());
+		}
+	});
+
+###Accessing Headers
+大部分 Http 请求头类似于 Map<String, String> ，每个属性都有0个或者1个值。但是某些头信息就像 Guava 中的 Multimap，允许有多个值。例如，对于 Http 响应信息头部中的属性包含多个变量值是非常常见的，并且是合法的。OkHttp 的 api 对这些所有情况都兼容。
+
+header(name, value) 方法可以写入唯一的请求头信息。就像map一样如果已经存在了一个值，在新的值添加前会移除当前值。
+addHeader(name, value) 方法增加头部信息而不用移除之前已经录入的信息。
+header(name) 方法可以读取响应头部信息, 返回的是最新的值，通常情况下都会返回值，但是如果本来就没有的话会返回 null 。
+headers(name) 方法可以返回头部所有信息。返回 Headers 类对象，Headers 对象可以根据 index 来访问头部信息。
+
+	private final OkHttpClient client = new OkHttpClient();
+	
+	public void run() throws Exception {
+		Request request = new Request.Builder()
+			.url("https://api.github.com/repos/square/okhttp/issues")
+			.header("User-Agent", "OkHttp Headers.java")
+			.addHeader("Accept", "application/json; q=0.5")
+			.addHeader("Accept", "application/vnd.github.v3+json")
+			.build();
+		
+		Response response = client.newCall(request).execute();
+		if (!response.isSuccessful()){
+			throw new IOException("Unexpected code " + response);
+		} 
+		
+		System.out.println("Server: " + response.header("Server"));
+		System.out.println("Date: " + response.header("Date"));
+		System.out.println("Vary: " + response.headers("Vary"));
+	}
+	
+### Post a String
+要通过 Http 请求体提交数据到服务器端，就必须使用 HTTP POST，这个例子是发送一个 markdown 文本到服务端来渲染成一个 HTML，因为整个请求是同时在内存中的，所以在使用这个 Api 时尽量避免使用数据量较大的文件( < 1MB)
+
+	public static final MediaType MEDIA_TYPE_MARKDOWN = MediaType.parse("text/x-markdown; charset=utf-8");
+	private final OkHttpClient client = new OkHttpClient();
+	
+	public void run() throws Exception {
+		String postBody = ""
+						+ "Releases\n"
+						+ "--------\n"
+						+ "\n"
+						+ " * _1.0_ May 6, 2013\n"
+						+ " * _1.1_ June 15, 2013\n"
+						+ " * _1.2_ August 11, 2013\n";
+		
+				Request request = new Request.Builder()
+						.url("https://api.github.com/markdown/raw")
+						.post(RequestBody.create(MEDIA_TYPE_MARKDOWN, postBody))
+						.build();
+				
+				Response response = client.newCall(request).execute();
+				if (!response.isSuccessful()){
+					throw new IOException("Unexpected code " + response);
+				} 
+				System.out.println(response.body().string());
+		}
+
+###Post Streaming
+这个例子是使用流式的方式发送请求体，请求体的内容是通过流的方式写入。我们可以通过BufferedSink.outputStream() 获取到输出流，通过输出流直接写入数据到 Okio 缓冲槽中。
+	
+	public static final MediaType MEDIA_TYPE_MARKDOWN = MediaType.parse("text/x-markdown; charset=utf-8");
+	private final OkHttpClient client = new OkHttpClient();
+	
+	public void run() throws Exception {
+		RequestBody requestBody = new RequestBody() {
+			@Override public MediaType contentType() {
+				return MEDIA_TYPE_MARKDOWN;
+			}
+			
+			@Override public void writeTo(BufferedSink sink) throws IOException {
+				sink.writeUtf8("Numbers\n");
+				sink.writeUtf8("-------\n");
+				for (int i = 2; i <= 997; i++) {
+					sink.writeUtf8(String.format(" * %s = %s\n", i, factor(i)));
+				}
+			}
+		
+			private String factor(int n) {
+				for (int i = 2; i < n; i++) {
+					int x = n / i;
+					if (x * i == n){
+						return factor(x) + " × " + i;
+					}
+				}
+				return Integer.toString(n);
+			}
+		};
+		
+		Request request = new Request.Builder()
+			.url("https://api.github.com/markdown/raw")
+			.post(requestBody)
+			.build();
+		
+		Response response = client.newCall(request).execute();
+		if (!response.isSuccessful()){
+			throw new IOException("Unexpected code " + response);
+		} 
+		System.out.println(response.body().string());
+	}
+	 
+### Posting a File
+使用 File 作为请求体
+  
+	public static final MediaType MEDIA_TYPE_MARKDOWN
+	      = MediaType.parse("text/x-markdown; charset=utf-8");
+	private final OkHttpClient client = new OkHttpClient();
+	
+	public void run() throws Exception {
+	    File file = new File("README.md");
+	    Request request = new Request.Builder()
+	        .url("https://api.github.com/markdown/raw")
+	        .post(RequestBody.create(MEDIA_TYPE_MARKDOWN, file))
+	        .build();
+	
+	    Response response = client.newCall(request).execute();
+	    if (!response.isSuccessful()){
+		    throw new IOException("Unexpected code " + response);
+	    } 
+	
+	    System.out.println(response.body().string());
+	}
+
+###Posting form parameters
+使用表单数据作为请求体，使用 FormEncodingBuilder 可以建立一个请求体，类似于 HTML <form> 标签，请求体中是键值对，请求体中的键值对会被URL编码之后发送出去。
+
+	private final OkHttpClient client = new OkHttpClient();
+	
+	public void run() throws Exception {
+	    RequestBody formBody = new FormEncodingBuilder()
+	        .add("search", "Jurassic Park")
+	        .build();
+	    Request request = new Request.Builder()
+	        .url("https://en.wikipedia.org/w/index.php")
+	        .post(formBody)
+	        .build();
+	
+	    Response response = client.newCall(request).execute();
+	    if (!response.isSuccessful()){
+		    throw new IOException("Unexpected code " + response);
+	    }
+	    System.out.println(response.body().string());
+	}
+
+###Posting a multipart request
+使用 MultipartBuilder 可以用来构建类似 HTML 文件上传表单请求这种复杂数据体，这种请求体中可以包含多块其他请求体。这种多块请求体中的每一部分都是独立的请求体，并且可以定义自己的数据头，如果这样的话这些数据头应该用来描述请求体的数据，比如说 Content-Disposition。如果是有效的数据体的话 Content-Length 和 Content-Type 会被自动加上。
+
+	private static final String IMGUR_CLIENT_ID = "...";
+	private static final MediaType MEDIA_TYPE_PNG = MediaType.parse("image/png");
+	private final OkHttpClient client = new OkHttpClient();
+	
+	public void run() throws Exception {
+	    // Use the imgur image upload API as documented at https://api.imgur.com/endpoints/image
+	    RequestBody requestBody = new MultipartBuilder()
+	        .type(MultipartBuilder.FORM)
+	        .addPart(
+	            Headers.of("Content-Disposition", "form-data; name=\"title\""),
+	            RequestBody.create(null, "Square Logo"))
+	        .addPart(
+	            Headers.of("Content-Disposition", "form-data; name=\"image\""),
+	            RequestBody.create(MEDIA_TYPE_PNG, new File("website/static/logo-square.png")))
+	        .build();
+	
+	    Request request = new Request.Builder()
+	        .header("Authorization", "Client-ID " + IMGUR_CLIENT_ID)
+	        .url("https://api.imgur.com/3/image")
+	        .post(requestBody)
+	        .build();
+	
+	    Response response = client.newCall(request).execute();
+	    if (!response.isSuccessful()){
+		    throw new IOException("Unexpected code " + response);
+	    }
+	    System.out.println(response.body().string());
+	}
+
+###Parse a JSON Response With Gson
+Gson 是用来把数据在 JSON 字符串和 JAVA 对象之间进行转换的工具，现在我们使用它来解析来自 GitHub API 的 JSON 响应数据。
+需要注意的是 ResponseBody.charStream() 是使用相应请求的头数据 Content-Type 来选择使用哪一种编码解析响应体的数据。如果Content-Type 中没有指定编码格式化，默认使用的是 UTF-8 格式。
+
+	private final OkHttpClient client = new OkHttpClient();
+	private final Gson gson = new Gson();
+	
+	public void run() throws Exception {
+	    Request request = new Request.Builder()
+	        .url("https://api.github.com/gists/c2a7c39532239ff261be")
+	        .build();
+	    Response response = client.newCall(request).execute();
+	    if (!response.isSuccessful()){
+		    throw new IOException("Unexpected code " + response);
+	    }
+	
+	    Gist gist = gson.fromJson(response.body().charStream(), Gist.class);
+	    for (Map.Entry<String, GistFile> entry : gist.files.entrySet()){
+	      System.out.println(entry.getKey());
+	      System.out.println(entry.getValue().content);
+	    }
+	}
+	
+	static class Gist {
+		Map<String, GistFile> files;
+	}
+	
+	static class GistFile {
+		String content;
+	}
+	
+###Response Caching
+想要缓存响应，你只需要指定缓存文件路径和缓存路径的大小限制，该缓存路径用来保存缓存数据文件。这个缓存的路径应该是私有的，对于不受信任的应用不能读取缓存的内容。
+
+如果多个缓存同时访问同一个缓存路径会发生错误。大多数应用只调用 new OkHttpClient() 一次，然后配置参数和缓存，在应用的每个地方都使用这个实例对象进行操作。否则两个缓存对象会相互影响，混乱的响应缓存，严重时还可能导致你的应用崩溃。
+
+响应缓存的所有配置信息都使用的 HTTP headers 数据。你可以在请求头部增加 Cache-Control: max-stale=3600 这样的配置，OkHttpClient 就会执行这个设置。web服务端会使用响应头来配置缓存时间信息，例如 Cache-Control: max-age=9600。有下面这些缓存头部配置：强制使用缓存缓存数据，强制使用网络数据，当使用GET方法的时候强制使用网络响应。
+
+	private final OkHttpClient client;
+	
+	public CacheResponse(File cacheDirectory) throws Exception {
+		int cacheSize = 10 * 1024 * 1024; // 10 MiB
+		Cache cache = new Cache(cacheDirectory, cacheSize);
+		
+		client = new OkHttpClient.Builder()
+			.cache(cache)
+			.build();
+	}
+	
+	public void run() throws Exception {
+		Request request = new Request.Builder()
+			.url("http://publicobject.com/helloworld.txt")
+			.build();
+		
+		Response response1 = client.newCall(request).execute();
+		if (!response1.isSuccessful()) throw new IOException("Unexpected code " + response1);
+		
+		String response1Body = response1.body().string();
+		System.out.println("Response 1 response:          " + response1);
+		System.out.println("Response 1 cache response:    " + response1.cacheResponse());
+		System.out.println("Response 1 network response:  " + response1.networkResponse());
+		
+		Response response2 = client.newCall(request).execute();
+		if (!response2.isSuccessful()) throw new IOException("Unexpected code " + response2);
+		
+		String response2Body = response2.body().string();
+		System.out.println("Response 2 response:          " + response2);
+		System.out.println("Response 2 cache response:    " + response2.cacheResponse());
+		System.out.println("Response 2 network response:  " + response2.networkResponse());
+		
+		System.out.println("Response 2 equals Response 1? " + response1Body.equals(response2Body));
+	}
+使用网络数据而不使用缓存数据响应，可以使用 CacheControl.FORCE_NETWORK。使用缓存数据而不使用网络数据，可以使用 CacheControl.FORCE_CACHE。但是要注意的是如果你选择强制使用缓存，而响应需要使用网络的话，OkHttp 会返回 504 Unsatisfiable Request 的响应。
+
+###Canceling a Call
+要立即取消正在执行的请求可以使用 Call.cancel() 。此时如果一个线程正在执行请求或者接收一个响应的话，它会收到一个 IOException。可以使用这个方法来取消那些不再需要的网络请求来节约网络资源。比如用户离开你的应用，无论你是同步还是异步的请求都可以被取消掉。
+也可以通过使用 tag 来同时取消多个请求。在构建请求对象的时候通过使用 RequestBuilder.tag(tag) 给请求打一个标签，然后通过 OkHttpClient.cancel(tag) 就取消所有使用这个 tag 的请求。
+
+	private final ScheduledExecutorService executor = Executors.newScheduledThreadPool(1);
+	private final OkHttpClient client = new OkHttpClient();
+	
+	public void run() throws Exception {
+		Request request = new Request.Builder()
+			.url("http://httpbin.org/delay/2") // This URL is served with a 2 second delay.
+			.build();
+		
+		final long startNanos = System.nanoTime();
+		final Call call = client.newCall(request);
+		
+		// Schedule a job to cancel the call in 1 second.
+		executor.schedule(new Runnable() {
+			@Override public void run() {
+				System.out.printf("%.2f Canceling call.%n", (System.nanoTime() - startNanos) / 1e9f);
+				call.cancel();
+				System.out.printf("%.2f Canceled call.%n", (System.nanoTime() - startNanos) / 1e9f);
+			}
+		}, 1, TimeUnit.SECONDS);
+		
+		try {
+			System.out.printf("%.2f Executing call.%n", (System.nanoTime() - startNanos) / 1e9f);
+			Response response = call.execute();
+			System.out.printf("%.2f Call was expected to fail, but completed: %s%n",
+			(System.nanoTime() - startNanos) / 1e9f, response);
+		} catch (IOException e) {
+			System.out.printf("%.2f Call failed as expected: %s%n",
+			(System.nanoTime() - startNanos) / 1e9f, e);
+		}
+	}
+	
+###Timeouts
+当网络的另一端不可达的时候，可以使用超时机制来取消请求。网络模块问题可以分为客户端连接问题、服务端可用问题或者两者都有问题，OkHttp 支持 connect、read、write 三种超时时间的配置。
+
+	private final OkHttpClient client;
+	
+	public ConfigureTimeouts() throws Exception {
+		client = new OkHttpClient.Builder()
+			.connectTimeout(10, TimeUnit.SECONDS)
+			.writeTimeout(10, TimeUnit.SECONDS)
+			.readTimeout(30, TimeUnit.SECONDS)
+			.build();
+	}
+	
+	public void run() throws Exception {
+		Request request = new Request.Builder()
+			.url("http://httpbin.org/delay/2") // This URL is served with a 2 second delay.
+			.build();
+		
+		Response response = client.newCall(request).execute();
+		System.out.println("Response completed: " + response);
+	}
+
+###Per-call Configuration(每个call进行单独配置)
+代理设置、超时和缓存这些 Http 客户端配置都是在 OkHttpClient 上设置。有时我们想要为单个 call 进行配置，这时我们可以 调用 OkHttpClient 对象的 OkHttpClient.newBuilder() 方法获取一个 OkHttpClient 对象，这个 OkHttpClient 对象和原来的 OkHttpClient 对象共享相同的connection pool,、dispatcher、 configuration，就好比是原来对象的浅拷贝。下面的例子，我们配置一个请求的超时时间是 500 ms，其他的请求超时时间为 3000 ms。
+		
+	private final OkHttpClient client = new OkHttpClient();
+	
+	public void run() throws Exception {
+		Request request = new Request.Builder()
+			.url("http://httpbin.org/delay/1") // This URL is served with a 1 second delay.
+			.build();
+		
+		try {
+			// Copy to customize OkHttp for this request.
+			OkHttpClient copy = client.newBuilder()
+				.readTimeout(500, TimeUnit.MILLISECONDS)
+				.build();
+			
+			Response response = copy.newCall(request).execute();
+			System.out.println("Response 1 succeeded: " + response);
+		} catch (IOException e) {
+			System.out.println("Response 1 failed: " + e);
+		}
+		
+		try {
+			// Copy to customize OkHttp for this request.
+			OkHttpClient copy = client.newBuilder()
+				.readTimeout(3000, TimeUnit.MILLISECONDS)
+				.build();
+			
+			Response response = copy.newCall(request).execute();
+			System.out.println("Response 2 succeeded: " + response);
+		} catch (IOException e) {
+			System.out.println("Response 2 failed: " + e);
+		}
+	}

@@ -1,0 +1,193 @@
+Andriod序列化原因
+序列化的原因基本可以归纳为以下三种情况：
+1.永久性保存对象，保存对象的字节序列到本地文件中；
+2.对象在网络中传递；
+3.对象在IPC(进程间的通讯)间传递。(IPC :Inter-process communication)
+序列化方法：
+在Android系统中关于序列化的方法一般有两种，分别是实现Serializable接口和Parcelable接口,其中Serializable接口是来自Java中的序列化接口，而Parcelable是Android自带的序列化接口。
+
+上述的两种序列化接口都有各自不同的优缺点，我们在实际使用时需根据不同情况而定。
+
+1.Serializable在序列化的时候会产生大量的临时变量，从而引起频繁的GC，而相比之下Parcelable的性能更高(毕竟是Android自带的)，所以当在使用内存时(如：序列化对象在网络中传递对象或序列化在进程间传递对象)，更推荐使用Parcelable接口。
+2.但Parcelable有个明显的缺点：不能能使用在要将数据存储在磁盘上的情况(如：永久性保存对象，保存对象的字节序列到本地文件中)，因为Parcel本质上为了更好的实现对象在IPC间传递，并不是一个通用的序列化机制，当改变任何Parcel中数据的底层实现都可能导致之前的数据不可读取，所以此时还是建议使用Serializable 。
+代码实现
+Serializable接口的实现及使用
+Serializable的接口实现很简单，只需让需要序列化的类继承Serializable 即可，系统会自动将其序列化，具体代码如下：
+
+public class Book implements Serializable {
+  private static final long serialVersionUID = 21455356667888L;
+  private String mName;
+  private String mPrice;
+ 
+  public String getmName() {
+    return mName;
+  }
+ 
+  public void setmName(String mName) {
+    this.mName = mName;
+  }
+ 
+  public String getmPrice() {
+    return mPrice;
+  }
+ 
+  public void setmPrice(String mPrice) {
+    this.mPrice = mPrice;
+  }
+ 
+}
+
+在Activity中使用方法：
+
+// serializable对象传递方法
+public void setSerializableMethod() {
+  Book book = new Book();
+  book.setmName("王海康");
+  book.setmPrice("20$");
+  Intent intent = new Intent(this, BookTest.class);
+  Bundle bundle = new Bundle();
+  bundle.putSerializable(SER_KEY, book);
+  intent.putExtras(bundle);
+  startActivity(intent);
+}
+ 
+// serializable对象获取方法
+public Book getSerializableMethod(){
+  Book mBook = (Book )getIntent().getSerializableExtra(SER_KEY);
+  return mBook;
+}
+Parcelable接口的实现及使用
+实现Parcelable接口主要可以分为一下几步： 
+1）implements Parcelable。 
+2）重写writeToParcel方法，将你的对象序列化为一个Parcel对象，即：将类的数据写入外部提供的Parcel中，打包需要传递的数据到Parcel容器保存，以便从Parcel容器获取数据。 
+3）重写describeContents方法，内容接口描述，默认返回0即可。 
+4）实例化静态内部对象CREATOR实现接口Parcelable.Creator 。 
+注意:若将Parcel看成是一个流，则先通过writeToParcel把对象写到流里面，再通过createFromParcel从流里读取对象，因此类实现的写入顺序和读出顺序必须一致。 
+具体实现代码如下：
+
+public class Person implements Parcelable {
+  private String mName;
+  private String mSex;
+  private int mAge;
+ 
+  public String getmName() {
+    return mName;
+  }
+ 
+  public void setmName(String mName) {
+    this.mName = mName;
+  }
+ 
+  public String getmSex() {
+    return mSex;
+  }
+ 
+  public void setmSex(String mSex) {
+    this.mSex = mSex;
+  }
+ 
+  public int getmAge() {
+    return mAge;
+  }
+ 
+  public void setmAge(int mAge) {
+    this.mAge = mAge;
+  }
+ 
+  @Override
+  public int describeContents() {
+    return 0;
+  }
+ 
+  @Override
+  public void writeToParcel(Parcel dest, int flags) {
+    dest.writeString(mName);
+    dest.writeString(mSex);
+    dest.writeInt(mAge);
+  }
+ 
+  public static final Parcelable.Creator<Person> CREATOR = new Creator<Person>() {
+ 
+    @Override
+    public Person createFromParcel(Parcel source) {
+      Person person = new Person();
+      person.mName = source.readString();
+      person.mSex = source.readString();
+      person.mAge = source.readInt();
+      return person;
+    }
+ 
+    //供反序列化本类数组时调用的
+    @Override
+    public Person[] newArray(int size) {
+      return new Person[size];
+    }
+  };
+在Activity中使用方法：
+1）传递单一对象,具体代码如下：
+
+// parcelable对象传递方法
+public void setParcelableMethod() {
+  Person person = new Person();
+  person.setmName("王海康");
+  person.setmSex("男");
+  person.setmAge(45);
+  Intent intent = new Intent(this, PersonTest.class);
+  Bundle bundle = new Bundle();
+  bundle.putParcelable(PAR_KEY, person);
+  intent.putExtras(bundle);
+  startActivity(intent);
+}
+ 
+// parcelable对象获取方法
+public Person getParcelableMethod(){
+  Person mPerson = (Person)getIntent().getParcelableExtra(PAR_KEY);
+  return mPerson;
+}
+2）传递对象列表,具体代码如下： 
+需要注意的是，若List personList = new ArrayList();则会报错，因为下面调用的putParcelableArrayList()函数其中一个参数的类型为ArrayList。
+
+// parcelable对象List传递方法
+public void setParcelableListMethod() {
+  ArrayList<Person> personList = new ArrayList<Person>();
+  Person person1 = new Person();
+  person1.setmName("王海康");
+  person1.setmSex("男");
+  person1.setmAge(45);
+  personList.add(person1);
+  Person person2 = new Person();
+  person2.setmName("薛岳");
+  person2.setmSex("男");
+  person2.setmAge(15);
+  personList.add(person2);
+  Intent intent = new Intent(this, PersonTest.class);
+  Bundle bundle = new Bundle();
+  bundle.putParcelableArrayList(PAR_LIST_KEY, personList);
+  intent.putExtras(bundle);
+  startActivity(intent);
+}
+ 
+// parcelable对象获取方法
+public ArrayList<Person> getParcelableMethod(){
+  ArrayList<Person> mPersonList = getIntent().getParcelableExtra(PAR_LIST_KEY);
+return mPersonList;
+}
+3）最后介绍一个投机取巧的方法： 
+不用继承Parcelable或Serializable方法即可实现IPC中对象的传递。这种方法的实现原理不是很明白，只知道代码中new ArrayList()返回的其实是一个EmptyArray.OBJECT数组，不过我感觉应该还是系统调用Serializable进行序列化的，如果各位读者有好的想法，欢迎告知。 
+具体代码如下：
+
+//对象List传递
+public void setObjectMethod(){
+  ......（省略）
+  ArrayList list = new ArrayList();
+  //ObjectList为某一对象列表
+  list.add(ObjectList);
+  bundle.putParcelableArrayList(PAR_LIST_KEY, list);
+  intent.putExtras(bundle);
+  startActivity(intent);
+}
+ 
+//获取对象List
+ArrayList list = bundle.getParcelableArrayList("list");
+//强转成你自己定义的list，这样ObjectList就是你传过来的那个list了。
+ObjectList= (List<Object>) list.get(0);
