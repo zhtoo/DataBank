@@ -1,0 +1,6 @@
+dpi		density		分辨率		px
+120		0.75		ldpi		36*36
+160		1			mdpi		48*48
+240		1.5			hdpi		72*72
+320		2			xhdpi		96*96
+480		3			xxhdpi		144*144
