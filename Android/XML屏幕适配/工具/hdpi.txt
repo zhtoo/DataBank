@@ -4,3 +4,8 @@ dpi		density		分辨率		px
 240		1.5			hdpi		72*72
 320		2			xhdpi		96*96
 480		3			xxhdpi		144*144
+640		4			xxxhdpi		192*192
+
+
+ic_launcher
+
