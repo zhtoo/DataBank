@@ -1,0 +1,98 @@
+Android 双击返回键退出程序的3种写法
+
+给大家推荐一个网站，有兴趣可以查阅，想为大家贡献一点自己的力量也可以投稿，老大审核通过会发表，更好的帮助有需要的人~欢迎大家踊跃投稿~地址如下： 
+http://www.123si.org/android
+
+下面先说说思路，具体如下： 
+1. 第一种就是根据用户点击俩次的时间间隔去判断是否退出程序; 
+2. 第二种就是使用android中计时器（Timer），其实这俩种都差不多.
+
+Activity.onKeyDown(); 
+当某个键被按下时会触发，但不会被任何的该Activity内的任何view处理。 
+默认按下KEYCODE_BACK键后会回到上一个Activity。
+
+Activity.onKeyUp(): 
+当某个按键被按下，松开后触发，但不会被任何的该Activity内的任何view处理。 
+默认没有执行任何操作，只是简单的给一个false作为返回值。
+
+One Way：onKeyUp()
+
+    //--------------使用onKeyUp()干掉他--------------
+
+    //记录用户首次点击返回键的时间
+    private long firstTime=0;
+
+    @Override
+    public boolean onKeyUp(int keyCode, KeyEvent event) {
+        switch (keyCode){
+            case KeyEvent.KEYCODE_BACK:
+                long secondTime=System.currentTimeMillis();
+                if(secondTime-firstTime>2000){
+                    Toast.makeText(MainActivity.this,"再按一次退出程序--->onKeyUp",Toast.LENGTH_SHORT).show();
+                    firstTime=secondTime;
+                    return true;
+                }else{
+                    System.exit(0);
+                }
+                break;
+        }
+        return super.onKeyUp(keyCode, event);
+    }
+
+	
+Two Way：onKeyDown()
+
+    //--------------使用onKeyDown()干掉他--------------
+
+    //记录用户首次点击返回键的时间
+    private long firstTime=0;
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if(keyCode==KeyEvent.KEYCODE_BACK && event.getAction()==KeyEvent.ACTION_DOWN){
+            if (System.currentTimeMillis()-firstTime>2000){
+                Toast.makeText(MainActivity.this,"再按一次退出程序--->onKeyDown",Toast.LENGTH_SHORT).show();
+                firstTime=System.currentTimeMillis();
+            }else{
+                finish();
+                System.exit(0);
+            }
+            return true;
+        }
+        return super.onKeyDown(keyCode, event);
+    }
+
+	
+Three Way：Timer
+
+ @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if(keyCode==KeyEvent.KEYCODE_BACK){
+            exitByDoubleClick();
+        }
+        return false;
+    }
+
+    private void exitByDoubleClick() {
+        Timer tExit=null;
+        if(!isExit){
+            isExit=true;
+            Toast.makeText(MainActivity.this,"再按一次退出程序--->Timer",Toast.LENGTH_SHORT).show();
+            tExit=new Timer();
+            tExit.schedule(new TimerTask() {
+                @Override
+                public void run() {
+                    isExit=false;//取消退出
+                }
+            },2000);// 如果2秒钟内没有按下返回键，则启动定时器取消掉刚才执行的任务
+        }else{
+            finish();
+            System.exit(0);
+        }
+    }
+
+
+听到一个哥儿们提供了一种思路，大家有兴趣可以实践下：
+
+重写onkeydown 在里面利用handle的延时发送来实现 showToast(“确定要退出？xxx欢迎您下次再来”); 
+// 利用handler延迟发送更改状态信息 handler.sendEmptyMessageDelayed(0, 2000);
