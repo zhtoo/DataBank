@@ -1,0 +1,101 @@
+0-23 16:23:20.332 12687-12687/? W/dalvikvm: threadid=1: thread exiting with uncaught exception (group=0x94c5eb20)
+10-23 16:23:20.332 12687-12687/? W/System.err: 	java.lang.NoClassDefFoundError: retrofit2.Retrofit$Builder
+10-23 16:23:20.332 12687-12687/? W/System.err:     at com.rd.wanghuidai.network.RDClient.updataRetrofit(RDClient.java:58)
+10-23 16:23:20.332 12687-12687/? W/System.err:     at com.rd.wanghuidai.network.RDClient.<init>(RDClient.java:31)
+10-23 16:23:20.332 12687-12687/? W/System.err:     at com.rd.wanghuidai.network.RDClient.getInstance(RDClient.java:41)
+10-23 16:23:20.332 12687-12687/? W/System.err:     at com.rd.wanghuidai.network.RDClient.getService(RDClient.java:92)
+10-23 16:23:20.332 12687-12687/? W/System.err:     at com.rd.wanghuidai.module.homepage.activity.SplashAct.req_servers(SplashAct.java:158)
+10-23 16:23:20.332 12687-12687/? W/System.err:     at com.rd.wanghuidai.module.homepage.activity.SplashAct.onCreate(SplashAct.java:68)
+10-23 16:23:20.332 12687-12687/? W/System.err:     at android.app.Activity.performCreate(Activity.java:5231)
+10-23 16:23:20.332 12687-12687/? W/System.err:     at android.app.Instrumentation.callActivityOnCreate(Instrumentation.java:1104)
+10-23 16:23:20.332 12687-12687/? W/System.err:     at android.app.ActivityThread.performLaunchActivity(ActivityThread.java:2163)
+10-23 16:23:20.332 12687-12687/? W/System.err:     at android.app.ActivityThread.handleLaunchActivity(ActivityThread.java:2269)
+10-23 16:23:20.332 12687-12687/? W/System.err:     at android.app.ActivityThread.access$800(ActivityThread.java:135)
+10-23 16:23:20.332 12687-12687/? W/System.err:     at android.app.ActivityThread$H.handleMessage(ActivityThread.java:1196)
+10-23 16:23:20.332 12687-12687/? W/System.err:     at android.os.Handler.dispatchMessage(Handler.java:102)
+10-23 16:23:20.332 12687-12687/? W/System.err:     at android.os.Looper.loop(Looper.java:136)
+10-23 16:23:20.332 12687-12687/? W/System.err:     at android.app.ActivityThread.main(ActivityThread.java:5045)
+10-23 16:23:20.332 12687-12687/? W/System.err:     at java.lang.reflect.Method.invokeNative(Native Method)
+10-23 16:23:20.332 12687-12687/? W/System.err:     at java.lang.reflect.Method.invoke(Method.java:515)
+10-23 16:23:20.332 12687-12687/? W/System.err:     at com.android.internal.os.ZygoteInit$MethodAndArgsCaller.run(ZygoteInit.java:779)
+10-23 16:23:20.332 12687-12687/? W/System.err:     at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:595)
+10-23 16:23:20.332 12687-12687/? W/System.err:     at dalvik.system.NativeStart.main(Native Method)
+
+NoClassDefFoundError_retrofit2_Retrofit$Builder
+
+参考地址：http://blog.csdn.net/ad18790520328/article/details/52711982
+
+问题描述：
+    此问题在android5.0以下不会出现，在android4.0会出现。
+    引入的包也没有问题：（搞了好久才解决，真感觉奇了怪了）
+	
+/*retrofit*/
+compile 'com.squareup.retrofit2:retrofit:2.1.0'
+compile 'com.squareup.retrofit2:converter-gson:2.1.0'
+compile 'com.squareup.retrofit2:converter-scalars:2.1.0'
+compile 'com.squareup.retrofit2:adapter-rxjava:2.1.0'
+
+ android4.+时的问题如异常信息
+
+    引起该问题的原因是： 
+defaultConfig {
+    ...
+    multiDexEnabled true
+}
+
+多dex打包 multiDexEnabled 打开了
+第一想法是关闭它，改为
+multiDexEnabled false
+
+但在android4.+版本上还会出现另一个问题：
+error:The number of method references in a .dex file cannot exceed 64K.
+Error:Execution failed for task ':app:transformClassesWithDexForRelease'.
+
+针对这个问题，还需用分包。
+最终还是回到第一个问题了，哈哈，废话少说看下边方案。
+
+解决方法：
+（1）在app的 build.gradle 中的dependencies 中添加
+compile 'com.android.support:multidex:1.0.1'
+
+dependencies {
+    compile fileTree(include: ['*.jar'], dir: 'libs')
+    compile 'com.android.support:multidex:1.0.1'
+}
+（2）在app的 build.gradle 中的 defaultConfig 中添加multiDexEnabled true
+defaultConfig {
+ ...
+ multiDexEnabled true
+}
+（3）在 AndroidManifest.xml 中的  application 标签中添加 :
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package=".test">
+     <application
+        ...
+         android:name="android.support.multidex.MultiDexApplication">
+        ...
+    </application>
+</manifest>
+
+提示：如果你的应用重写了Application，则你需要继承MultiDexApplication而不再是Application啦
+
+在重写的Application中重写下边方法
+/**
+ * 分割 Dex 支持
+* @param base
+*/
+@Override
+protected void attachBaseContext(Context base) {
+         super.attachBaseContext(base);
+          MultiDex.install(this);
+}
+
+
+
+
+
+
+
+
+

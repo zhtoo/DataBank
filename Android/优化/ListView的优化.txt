@@ -1,0 +1,28 @@
+Google推荐优化方案：
+
+在ListView的Adapter中进行优化　
+
+public View getView(int position, View convertView, ViewGroup parent) {
+      Log.d("MyAdapter", "Position:" + position + "---"
+              + String.valueOf(System.currentTimeMillis()));
+      ViewHolder holder;
+      if (convertView == null) {
+          final LayoutInflater inflater = (LayoutInflater) mContext
+                  .getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+          convertView = inflater.inflate(R.layout.list_item_icon_text, null);
+          holder = new ViewHolder();
+          holder.icon = (ImageView) convertView.findViewById(R.id.icon);
+          holder.text = (TextView) convertView.findViewById(R.id.text);
+          convertView.setTag(holder);
+      } else {
+          holder = (ViewHolder) convertView.getTag();
+      }
+      holder.icon.setImageResource(R.drawable.icon);
+      holder.text.setText(mData[position]);
+      return convertView;
+  }
+   
+  static class ViewHolder {
+      ImageView icon;
+      TextView text;
+	}
