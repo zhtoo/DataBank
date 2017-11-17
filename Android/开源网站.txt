@@ -1,0 +1,43 @@
+1. GitHub
+https://github.com/ 
+
+2. codeKK
+http://p.codekk.com/
+
+3. Android Arsenal
+http://android-arsenal.com/
+
+4. Android Libraries and Resources
+http://alamkanak.github.io/android-libraries-and-resources/
+
+5. GrepCode
+http://www.grepcode.com/
+
+6.stackoverflow
+https://stackoverflow.com/
+
+7、kotlin学习
+https://www.kotlincn.net/docs/reference/android-overview.html
+
+
+
+http://www.trinea.cn/
+
+干货
+http://gank.io/
+
+https://developers.google.com/
+
+https://developer.android.google.cn/index.html
+
+http://www.android-studio.org/
+
+gradle下载
+https://downloads.gradle.org/distributions/gradle-3.3-all.zip
+
+https://www.kymjs.com/
+
+jar包下载
+http://www.manyjar.com/
+
+
